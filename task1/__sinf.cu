@@ -8,8 +8,7 @@
 const int N = 1000000000; // 10^9
 
 // Ядро для инициализации массива
-__global__ void
-initializeArray(float *arr)
+__global__ void initializeArray(float *arr)
 {
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N)
@@ -18,12 +17,12 @@ initializeArray(float *arr)
     }
 }
 
-float calcError(float *cpuArr, int arraySize)
+float calcError(float *hostArr, int arraySize)
 {
-    float err = 0;
+    double err = 0;
     for (int i = 0; i < arraySize; i++)
     {
-        err += abs(sinf((i % 360) * M_PI / 180) - cpuArr[i]);
+        err += abs(sin((i % 360) * M_PI / 180) - hostArr[i]);
     }
     return err / arraySize;
 }
@@ -32,7 +31,7 @@ int main()
 {
     // Время начала выполнения
     clock_t start = clock();
-    int device = 0;
+    int device = 1;
     cudaSetDevice(device);
     // Выделение памяти на GPU для массива
     float *d_arr;
@@ -62,7 +61,7 @@ int main()
     clock_t end = clock();
 
     // Вывод времени выполнения
-    printf("Время выполнения: %0.5f секунд", (end - start) / CLOCKS_PER_SEC);
+    printf("Время выполнения: %0.5f секунд \n", (end - start) / CLOCKS_PER_SEC);
 
     return 0;
 };

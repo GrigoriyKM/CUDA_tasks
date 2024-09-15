@@ -8,22 +8,21 @@
 const int N = 1000000000; // 10^9
 
 // Ядро для инициализации массива
-__global__ void
-initializeArray(float *arr)
+__global__ void initializeArray(float *arr)
 {
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N)
     {
-        arr[i] = sinf((i % 360) * M_PI / 180);
+        arr[i] = sin((i % 360) * M_PI / 180);
     }
 }
 
-float calcError(float *cpuArr, int arraySize)
+float calcError(float *hostArr, int arraySize)
 {
-    float err = 0;
+    double err = 0;
     for (int i = 0; i < arraySize; i++)
     {
-        err += abs(sinf((i % 360) * M_PI / 180) - cpuArr[i]);
+        err += abs(sin((i % 360) * M_PI / 180) - hostArr[i]);
     }
     return err / arraySize;
 }
@@ -50,7 +49,7 @@ int main()
     cudaMemcpy(h_arr, d_arr, N * sizeof(float), cudaMemcpyDeviceToHost);
 
     // Расчет ошибки
-    printf("Ошибка (sinf) = %0.10f", calcError(h_arr, N));
+    printf("Ошибка (sinf) = %0.10f \n", calcError(h_arr, N));
 
     // Освобождение памяти на GPU
     cudaFree(d_arr);
@@ -62,6 +61,6 @@ int main()
     clock_t end = clock();
 
     // Вывод времени выполнения
-    printf("Время выполнения: %0.5f секунд", (end - start) / CLOCKS_PER_SEC);
+    printf("Время выполнения: %0.5f секунд \n", (end - start) / CLOCKS_PER_SEC);
     return 0;
 };
