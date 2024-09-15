@@ -16,7 +16,7 @@ __global__ void initializeArray(float *arr)
     }
 }
 
-float calcError(float *hostArr, int arraySize)
+double calcError(float *hostArr, int arraySize)
 {
     double err = 0;
     for (int i = 0; i < arraySize; i++)
