@@ -13,7 +13,7 @@ __global__ void initializeArray(float *arr)
     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < N)
     {
-        arr[i] = sin((i % 360) * M_PI / 180);
+        arr[i] = sinf((i % 360) * M_PI / 180);
     }
 }
 
