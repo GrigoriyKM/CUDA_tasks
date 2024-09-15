@@ -26,6 +26,15 @@ double calcError(float *hostArr, int arraySize)
     return err / arraySize;
 }
 
+void checkCudaError(cudaError_t status)
+{
+    if (status != cudaSuccess)
+    {
+        printf("CUDA error: %s\n", cudaGetErrorString(status));
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main()
 {
     // Время начала выполнения
@@ -34,10 +43,10 @@ int main()
     cudaSetDevice(device);
     // Выделение памяти на GPU для массива
     float *d_arr;
-    cudaMalloc(&d_arr, N * sizeof(float));
+    checkCudaError(cudaMalloc(&d_arr, N * sizeof(float)));
 
-    int blockSize = 256;
-    int numBlocks = N / blockSize;
+    dim3 blockSize = dim3(256);
+    dim3 numBlocks = dim3((N + blockSize.x - 1) / blockSize.x);
     // Запуск ядра для инициализации массива
     initializeArray<<<numBlocks, blockSize>>>(d_arr);
 
@@ -45,7 +54,8 @@ int main()
     float *h_arr = (float *)malloc(N * sizeof(float));
 
     // Копирование массива с GPU на CPU
-    cudaMemcpy(h_arr, d_arr, N * sizeof(float), cudaMemcpyDeviceToHost);
+    checkCudaError(cudaMemcpy(h_arr, d_arr, N * sizeof(float), cudaMemcpyDeviceToHost));
+    checkCudaError(cudaDeviceSynchronize());
 
     // Расчет ошибки
     printf("Ошибка (sin) = %0.10f \n", calcError(h_arr, N));
