@@ -136,11 +136,23 @@ int main(int, char **)
     cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
     cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+
     applyFilter<<<grid_size, blockSize>>>(d_r_n, d_r, pitch_r, width, height, d_kernel);
     applyFilter<<<grid_size, blockSize>>>(d_g_n, d_g, pitch_g, width, height, d_kernel);
     applyFilter<<<grid_size, blockSize>>>(d_b_n, d_b, pitch_b, width, height, d_kernel);
 
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
 
     CUDA_CHECK_RETURN(cudaMemcpy(h_r_n, d_r_n, size, cudaMemcpyDeviceToHost));
     CUDA_CHECK_RETURN(cudaMemcpy(h_g_n, d_g_n, size, cudaMemcpyDeviceToHost));
@@ -170,6 +182,7 @@ int main(int, char **)
     cudaFree(d_b);
 
     std::cout << "Image processing complete! Check 'filtred_image.png'!" << std::endl;
+    std::cout << "Время выполнения: " << milliseconds << " мсек" << std::endl; // # Время выполнения: 6.7031 мсек
 
     return 0;
 }
