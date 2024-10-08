@@ -1,5 +1,16 @@
-filter_shared.out:
-	nvcc filter_shared.cu -o filter_shared.out `pkg-config --cflags --libs opencv`
+all: global.out shared.out texture.out shared_texture.out
+
+global.out:
+	nvcc global.cu -o global.out `pkg-config --cflags --libs opencv`
+
+shared.out:
+	nvcc shared.cu -o shared.out `pkg-config --cflags --libs opencv`
+
+texture.out:
+	nvcc texture.cu -o texture.out `pkg-config --cflags --libs opencv`
+
+shared_texture.out:
+	nvcc shared_texture.cu -o shared_texture.out `pkg-config --cflags --libs opencv`
 
 clean:
-	rm ./filter_global.out ./filter_shared.out
+	rm ./global.out ./shared.out ./texture.out ./shared_texture.out
