@@ -1,0 +1,19 @@
+[g_konyukhov@gpuserv task2]$ ./global.out
+Используемая память: global memory
+Результат фильтрации: 'filtred_image.png'!
+Время выполнения: 6.97242 мсек
+
+[g_konyukhov@gpuserv task2]$ ./texture.out
+Используемая память: texture memory
+Результат фильтрации: 'filtred_image.png'!
+Время выполнения: 6.8936 мсек
+
+[g_konyukhov@gpuserv task2]$ ./shared.out
+Используемая память: shared memory
+Результат фильтрации: 'filtred_image.png'!
+Время выполнения: 6.82397 мсек
+
+[g_konyukhov@gpuserv task2]$ ./shared_texture.out
+Используемая память: shared and texture memory
+Результат фильтрации: 'filtred_image.png'!
+Время выполнения: 6.2863 мсек
