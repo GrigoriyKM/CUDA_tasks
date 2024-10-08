@@ -7,7 +7,6 @@
 
 #define BLOCK_SIZE (32u)
 #define FILTER_SIZE (9u)
-#define TILE_SIZE (23u) // BLOCK_SIZE - 2( FILTER_SIZE/2)
 #define SIGMA 2.0f
 
 #define CUDA_CHECK_RETURN(value)                                  \
@@ -21,15 +20,15 @@
         }                                                         \
     }
 
-float sobelKernelX[3 * 3] = {
-    -1, 0, 1,
-    -2, 0, 2,
-    -1, 0, 1};
+// float sobelKernelX[3 * 3] = {
+//     -1, 0, 1,
+//     -2, 0, 2,
+//     -1, 0, 1};
 
-float sobelKernelY[3 * 3] = {
-    1, 2, 1,
-    0, 0, 0,
-    -1, -2, -1};
+// float sobelKernelY[3 * 3] = {
+//     1, 2, 1,
+//     0, 0, 0,
+//     -1, -2, -1};
 
 void createGaussianKernel(float *kernel, int k_size, float sigma)
 {
@@ -55,14 +54,14 @@ void createGaussianKernel(float *kernel, int k_size, float sigma)
 __global__ void applyFilter(unsigned char *out, unsigned char *in,
                             unsigned int width, unsigned int height, float *kernel)
 {
-    int x_o = (TILE_SIZE * blockIdx.x) + threadIdx.x;
-    int y_o = (TILE_SIZE * blockIdx.y) + threadIdx.y;
+    int x_o = (BLOCK_SIZE * blockIdx.x) + threadIdx.x;
+    int y_o = (BLOCK_SIZE * blockIdx.y) + threadIdx.y;
 
     int x_i = x_o - FILTER_SIZE / 2;
     int y_i = y_o - FILTER_SIZE / 2;
 
     int sum = 0;
-    if ((threadIdx.x < TILE_SIZE) && (threadIdx.y < TILE_SIZE))
+    if ((threadIdx.x < BLOCK_SIZE) && (threadIdx.y < BLOCK_SIZE))
     {
 
         for (int r = 0; r < FILTER_SIZE; ++r)
@@ -146,7 +145,7 @@ int main(int, char **)
     CUDA_CHECK_RETURN(cudaMemcpy(d_g, channels[1].data, size, cudaMemcpyHostToDevice)); // G
     CUDA_CHECK_RETURN(cudaMemcpy(d_b, channels[0].data, size, cudaMemcpyHostToDevice)); // B
 
-    dim3 grid_size((width + TILE_SIZE - 1) / TILE_SIZE, (height + TILE_SIZE - 1) / TILE_SIZE);
+    dim3 grid_size((width + BLOCK_SIZE - 1) / BLOCK_SIZE, (height + BLOCK_SIZE - 1) / BLOCK_SIZE);
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
 
     // ядро гаусса
