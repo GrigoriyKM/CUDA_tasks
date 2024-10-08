@@ -52,7 +52,7 @@ void createGaussianKernel(float *kernel, int k_size, float sigma)
     }
 }
 
-__global__ void applyFilter(unsigned char *out, unsigned char *in, size_t pitch,
+__global__ void applyFilter(unsigned char *out, cudaTextureObject_t textureObj,
                             unsigned int width, unsigned int height, float *kernel)
 {
     int x_o = (TILE_SIZE * blockIdx.x) + threadIdx.x;
@@ -64,10 +64,14 @@ __global__ void applyFilter(unsigned char *out, unsigned char *in, size_t pitch,
     __shared__ unsigned char sBuffer[BLOCK_SIZE][BLOCK_SIZE];
 
     if ((x_i >= 0) && (x_i < width) && (y_i >= 0) && (y_i < height))
-        sBuffer[threadIdx.y][threadIdx.x] = in[y_i * pitch + x_i];
+    {
+        unsigned char value = tex2D<unsigned char>(textureObj, x_i, y_i);
+        sBuffer[threadIdx.y][threadIdx.x] = value;
+    }
     else
+    {
         sBuffer[threadIdx.y][threadIdx.x] = 0;
-
+    }
     __syncthreads();
 
     int sum = 0;
@@ -89,9 +93,32 @@ __global__ void applyFilter(unsigned char *out, unsigned char *in, size_t pitch,
     }
 }
 
+cudaTextureObject_t createTexture(cudaArray_t array)
+{
+    cudaTextureObject_t textureObject = 0;
+
+    struct cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    struct cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = array;
+
+    texDesc.addressMode[0] = cudaAddressModeWrap;
+    texDesc.addressMode[1] = cudaAddressModeWrap;
+    texDesc.filterMode = cudaFilterModePoint;
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = false;
+
+    CUDA_CHECK_RETURN(cudaCreateTextureObject(&textureObject, &resDesc, &texDesc, NULL));
+
+    return textureObject;
+}
+
 int main(int, char **)
 {
-    std::cout << "Start processing the image" << std::endl;
+    std::cout << "Используемая память: shared and texture memory" << std::endl;
 
     cv::Mat img = cv::imread("Lenna.png", cv::IMREAD_COLOR);
     if (img.empty())
@@ -104,6 +131,8 @@ int main(int, char **)
     unsigned int height = img.rows;
 
     unsigned int size = width * height * sizeof(unsigned char);
+
+    // результат фильтрации на хосте
     unsigned char *h_r_n = (unsigned char *)malloc(size);
     unsigned char *h_g_n = (unsigned char *)malloc(size);
     unsigned char *h_b_n = (unsigned char *)malloc(size);
@@ -111,20 +140,33 @@ int main(int, char **)
     cv::Mat channels[3];
     cv::split(img, channels);
 
+    // результат фильтрации на устройстве
     unsigned char *d_r_n, *d_g_n, *d_b_n;
     CUDA_CHECK_RETURN(cudaMalloc(&d_r_n, size));
     CUDA_CHECK_RETURN(cudaMalloc(&d_g_n, size));
     CUDA_CHECK_RETURN(cudaMalloc(&d_b_n, size));
 
-    unsigned char *d_r, *d_g, *d_b;
-    size_t pitch_r, pitch_g, pitch_b;
-    CUDA_CHECK_RETURN(cudaMallocPitch(&d_r, &pitch_r, width * sizeof(unsigned char), height));
-    CUDA_CHECK_RETURN(cudaMallocPitch(&d_g, &pitch_g, width * sizeof(unsigned char), height));
-    CUDA_CHECK_RETURN(cudaMallocPitch(&d_b, &pitch_b, width * sizeof(unsigned char), height));
+    cudaArray_t d_r, d_g, d_b;
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<unsigned char>();
+    CUDA_CHECK_RETURN(cudaMallocArray(&d_r, &channelDesc, width, height));
+    CUDA_CHECK_RETURN(cudaMallocArray(&d_g, &channelDesc, width, height));
+    CUDA_CHECK_RETURN(cudaMallocArray(&d_b, &channelDesc, width, height));
 
-    CUDA_CHECK_RETURN(cudaMemcpy2D(d_r, pitch_r, channels[2].data, channels[2].step[0], width, height, cudaMemcpyHostToDevice)); // R
-    CUDA_CHECK_RETURN(cudaMemcpy2D(d_g, pitch_g, channels[1].data, channels[1].step[0], width, height, cudaMemcpyHostToDevice)); // G
-    CUDA_CHECK_RETURN(cudaMemcpy2D(d_b, pitch_b, channels[0].data, channels[0].step[0], width, height, cudaMemcpyHostToDevice)); // B
+    // cudaMemcpy2DToArray(
+    // cudaArray_t dst,     // Целевой 2D массив на device
+    // size_t wOffset,      // Смещение по ширине в целевом массиве
+    // size_t hOffset,      // Смещение по высоте в целевом массиве
+    // const void* src,     // Источник данных (в памяти)
+    // size_t srcPitch,     // Шаг в байтах в источнике между строками
+    // size_t width,        // Ширина копируемых данных в байтах
+    // size_t height,       // Высота копируемых данных
+    // cudaMemcpyKind kind  // Направление копирования (cudaMemcpyHostToDevice или cudaMemcpyDeviceToDevice и т.д.)
+    CUDA_CHECK_RETURN(cudaMemcpy2DToArray(d_r, 0, 0, channels[2].data, channels[2].step,
+                                          width * sizeof(unsigned char), height, cudaMemcpyHostToDevice)); // R
+    CUDA_CHECK_RETURN(cudaMemcpy2DToArray(d_g, 0, 0, channels[1].data, channels[1].step,
+                                          width * sizeof(unsigned char), height, cudaMemcpyHostToDevice)); // G
+    CUDA_CHECK_RETURN(cudaMemcpy2DToArray(d_b, 0, 0, channels[0].data, channels[0].step,
+                                          width * sizeof(unsigned char), height, cudaMemcpyHostToDevice)); // B
 
     dim3 grid_size((width + TILE_SIZE - 1) / TILE_SIZE, (height + TILE_SIZE - 1) / TILE_SIZE);
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
@@ -135,16 +177,18 @@ int main(int, char **)
     float *d_kernel;
     cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
     cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
-
+    cudaTextureObject_t texObject_r = createTexture(d_r);
+    cudaTextureObject_t texObject_g = createTexture(d_g);
+    cudaTextureObject_t texObject_b = createTexture(d_b);
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
 
-    applyFilter<<<grid_size, blockSize>>>(d_r_n, d_r, pitch_r, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_g_n, d_g, pitch_g, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_b_n, d_b, pitch_b, width, height, d_kernel);
+    applyFilter<<<grid_size, blockSize>>>(d_r_n, texObject_r, width, height, d_kernel);
+    applyFilter<<<grid_size, blockSize>>>(d_g_n, texObject_g, width, height, d_kernel);
+    applyFilter<<<grid_size, blockSize>>>(d_b_n, texObject_b, width, height, d_kernel);
 
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
@@ -181,8 +225,8 @@ int main(int, char **)
     cudaFree(d_g);
     cudaFree(d_b);
 
-    std::cout << "Image processing complete! Check 'filtred_image.png'!" << std::endl;
-    std::cout << "Время выполнения: " << milliseconds << " мсек" << std::endl; // # Время выполнения: 6.7031 мсек
+    std::cout << "Результат фильтрации: 'filtred_image.png'!" << std::endl;
+    std::cout << "Время выполнения: " << milliseconds << " мсек" << std::endl;
 
     return 0;
 }
