@@ -1,19 +1,26 @@
+Tesla V100-PCIE-16GB
+#define BLOCK_SIZE (32u)
+#define FILTER_SIZE (9u)
+#define TILE_SIZE (23u) // BLOCK_SIZE - 2( FILTER_SIZE/2)
+Размер изображения: 8889 на 5000 пикселей
+
 [g_konyukhov@gpuserv task2]$ ./global.out
 Используемая память: global memory
 Результат фильтрации: 'filtred_image.png'!
-Время выполнения: 6.97242 мсек
-
-[g_konyukhov@gpuserv task2]$ ./texture.out
-Используемая память: texture memory
-Результат фильтрации: 'filtred_image.png'!
-Время выполнения: 6.8936 мсек
+Время выполнения: 35.5861 мсек
 
 [g_konyukhov@gpuserv task2]$ ./shared.out
 Используемая память: shared memory
 Результат фильтрации: 'filtred_image.png'!
-Время выполнения: 6.82397 мсек
+Время выполнения: 13.283 мсек
+
+[g_konyukhov@gpuserv task2]$ ./texture.out
+Используемая память: texture memory
+Результат фильтрации: 'filtred_image.png'!
+Время выполнения: 35.8663 мсек
 
 [g_konyukhov@gpuserv task2]$ ./shared_texture.out
 Используемая память: shared and texture memory
 Результат фильтрации: 'filtred_image.png'!
-Время выполнения: 6.2863 мсек
+Время выполнения: 13.3161 мсек
+
