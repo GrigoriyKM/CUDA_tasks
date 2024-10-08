@@ -215,6 +215,10 @@ int main(int, char **)
     cudaFree(d_r);
     cudaFree(d_g);
     cudaFree(d_b);
+    cudaFree(d_kernel);
+    CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_r));
+    CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_g));
+    CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_b));
 
     std::cout << "Результат фильтрации: 'filtred_image.png'!" << std::endl;
     std::cout << "Время выполнения: " << milliseconds << " мсек" << std::endl;
