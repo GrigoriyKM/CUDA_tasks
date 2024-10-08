@@ -52,7 +52,7 @@ void createGaussianKernel(float *kernel, int k_size, float sigma)
 }
 
 __global__ void applyFilter(unsigned char *out, unsigned char *in,
-                            unsigned int width, unsigned int height, float *kernel)
+                            unsigned int width, unsigned int height)
 {
     int x_o = (BLOCK_SIZE * blockIdx.x) + threadIdx.x;
     int y_o = (BLOCK_SIZE * blockIdx.y) + threadIdx.y;
@@ -70,12 +70,12 @@ __global__ void applyFilter(unsigned char *out, unsigned char *in,
             {
                 if (x_i + c >= 0 && x_i + c < width && y_i + r >= 0 && y_i + r < height)
                 {
-                    float k_value = kernel[r * FILTER_SIZE + c];
-                    sum += in[(y_i + r) * width + x_i + c] * k_value;
+                    // float k_value = kernel[r * FILTER_SIZE + c];
+                    sum += in[(y_i + r) * width + x_i + c];
                 }
             }
         }
-        // sum = sum / (FILTER_SIZE * FILTER_SIZE);
+        sum = sum / (FILTER_SIZE * FILTER_SIZE);
         // write into the output
         if (x_o < width && y_o < height)
             out[y_o * width + x_o] = sum;
@@ -109,7 +109,7 @@ int main(int, char **)
 {
     std::cout << "Используемая память: global memory" << std::endl;
 
-    cv::Mat img = cv::imread("Lenna.png", cv::IMREAD_COLOR);
+    cv::Mat img = cv::imread("fox.png", cv::IMREAD_COLOR);
     if (img.empty())
     {
         std::cerr << "Error loading image!" << std::endl;
@@ -149,20 +149,20 @@ int main(int, char **)
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
 
     // ядро гаусса
-    float h_kernel[FILTER_SIZE * FILTER_SIZE];
-    createGaussianKernel(h_kernel, FILTER_SIZE, SIGMA);
-    float *d_kernel;
-    cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
-    cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
+    // float h_kernel[FILTER_SIZE * FILTER_SIZE];
+    // createGaussianKernel(h_kernel, FILTER_SIZE, SIGMA);
+    // float *d_kernel;
+    // cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
+    // cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
     cudaEventRecord(start);
 
-    applyFilter<<<grid_size, blockSize>>>(d_r_n, d_r, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_g_n, d_g, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_b_n, d_b, width, height, d_kernel);
+    applyFilter<<<grid_size, blockSize>>>(d_r_n, d_r, width, height);
+    applyFilter<<<grid_size, blockSize>>>(d_g_n, d_g, width, height);
+    applyFilter<<<grid_size, blockSize>>>(d_b_n, d_b, width, height);
 
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
@@ -198,7 +198,7 @@ int main(int, char **)
     cudaFree(d_r);
     cudaFree(d_g);
     cudaFree(d_b);
-    cudaFree(d_kernel);
+    // cudaFree(d_kernel);
 
     std::cout << "Результат фильтрации: 'filtred_image.png'!" << std::endl;
     std::cout << "Время выполнения: " << milliseconds << " мсек" << std::endl;

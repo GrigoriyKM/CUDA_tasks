@@ -53,7 +53,7 @@ void createGaussianKernel(float *kernel, int k_size, float sigma)
 }
 
 __global__ void applyFilter(unsigned char *out, cudaTextureObject_t textureObj,
-                            unsigned int width, unsigned int height, float *kernel)
+                            unsigned int width, unsigned int height)
 {
     int x_o = (TILE_SIZE * blockIdx.x) + threadIdx.x;
     int y_o = (TILE_SIZE * blockIdx.y) + threadIdx.y;
@@ -82,11 +82,11 @@ __global__ void applyFilter(unsigned char *out, cudaTextureObject_t textureObj,
         {
             for (int c = 0; c < FILTER_SIZE; ++c)
             {
-                float k_value = kernel[r * FILTER_SIZE + c];
-                sum += sBuffer[threadIdx.y + r][threadIdx.x + c] * k_value;
+                // float k_value = kernel[r * FILTER_SIZE + c];
+                sum += sBuffer[threadIdx.y + r][threadIdx.x + c];
             }
         }
-        // sum = sum / (FILTER_SIZE * FILTER_SIZE);
+        sum = sum / (FILTER_SIZE * FILTER_SIZE);
         // write into the output
         if (x_o < width && y_o < height)
             out[y_o * width + x_o] = sum;
@@ -120,7 +120,7 @@ int main(int, char **)
 {
     std::cout << "Используемая память: shared and texture memory" << std::endl;
 
-    cv::Mat img = cv::imread("Lenna.png", cv::IMREAD_COLOR);
+    cv::Mat img = cv::imread("fox.png", cv::IMREAD_COLOR);
     if (img.empty())
     {
         std::cerr << "Error loading image!" << std::endl;
@@ -172,11 +172,11 @@ int main(int, char **)
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
 
     // ядро гаусса
-    float h_kernel[FILTER_SIZE * FILTER_SIZE];
-    createGaussianKernel(h_kernel, FILTER_SIZE, SIGMA);
-    float *d_kernel;
-    cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
-    cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
+    // float h_kernel[FILTER_SIZE * FILTER_SIZE];
+    // createGaussianKernel(h_kernel, FILTER_SIZE, SIGMA);
+    // float *d_kernel;
+    // cudaMalloc(&d_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float));
+    // cudaMemcpy(d_kernel, h_kernel, FILTER_SIZE * FILTER_SIZE * sizeof(float), cudaMemcpyHostToDevice);
     cudaTextureObject_t texObject_r = createTexture(d_r);
     cudaTextureObject_t texObject_g = createTexture(d_g);
     cudaTextureObject_t texObject_b = createTexture(d_b);
@@ -186,9 +186,9 @@ int main(int, char **)
 
     cudaEventRecord(start);
 
-    applyFilter<<<grid_size, blockSize>>>(d_r_n, texObject_r, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_g_n, texObject_g, width, height, d_kernel);
-    applyFilter<<<grid_size, blockSize>>>(d_b_n, texObject_b, width, height, d_kernel);
+    applyFilter<<<grid_size, blockSize>>>(d_r_n, texObject_r, width, height);
+    applyFilter<<<grid_size, blockSize>>>(d_g_n, texObject_g, width, height);
+    applyFilter<<<grid_size, blockSize>>>(d_b_n, texObject_b, width, height);
 
     CUDA_CHECK_RETURN(cudaDeviceSynchronize());
 
@@ -224,7 +224,7 @@ int main(int, char **)
     cudaFree(d_r);
     cudaFree(d_g);
     cudaFree(d_b);
-    cudaFree(d_kernel);
+    // cudaFree(d_kernel);
     CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_r));
     CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_g));
     CUDA_CHECK_RETURN(cudaDestroyTextureObject(texObject_b));
