@@ -44,8 +44,7 @@ void createGaussianKernel(float *kernel, int k_size, float sigma)
 }
 
 __global__ void applyFilter(unsigned char *out, unsigned char *in,
-                            unsigned int width, unsigned int height,
-                            int startY, int endY)
+                            unsigned int width, unsigned int height)
 {
     int x_o = (TILE_SIZE * blockIdx.x) + threadIdx.x;
     int y_o = (TILE_SIZE * blockIdx.y) + threadIdx.y;
@@ -55,9 +54,9 @@ __global__ void applyFilter(unsigned char *out, unsigned char *in,
 
     __shared__ unsigned char sBuffer[BLOCK_SIZE][BLOCK_SIZE];
 
-    if ((x_i >= 0) && (x_i < width) && ((y_i + startY) >= 0) && ((y_i + startY) < endY))
+    if ((x_i >= 0) && (x_i < width) && (y_i >= 0) && (y_i < height))
     {
-        sBuffer[threadIdx.y][threadIdx.x] = in[(y_i + startY) * width + x_i];
+        sBuffer[threadIdx.y][threadIdx.x] = in[y_i * width + x_i];
     }
     else
     {
@@ -80,8 +79,8 @@ __global__ void applyFilter(unsigned char *out, unsigned char *in,
         }
         sum = sum / (FILTER_SIZE * FILTER_SIZE);
         // write into the output
-        if (x_o < width && (y_o + startY) < endY)
-            out[(y_o + startY) * width + x_o] = sum;
+        if (x_o < width && y_o < height)
+            out[y_o * width + x_o] = sum;
     }
 }
 
@@ -96,6 +95,11 @@ void filterImageWithGPUs(unsigned char *inputImage, unsigned char *outputImage, 
 
     // Allocate memory on the device
     CUDA_CHECK_RETURN(cudaSetDevice(gpuId));
+    cudaEvent_t start, stop;
+    CUDA_CHECK_RETURN(cudaEventCreate(&start));
+    CUDA_CHECK_RETURN(cudaEventCreate(&stop));
+
+    CUDA_CHECK_RETURN(cudaEventRecord(start));
 
     int totalHeight = adjustedEndY - adjustedStartY; // New height with overlap
     unsigned int d_size = width * totalHeight * sizeof(unsigned char);
@@ -111,12 +115,19 @@ void filterImageWithGPUs(unsigned char *inputImage, unsigned char *outputImage, 
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize((width + TILE_SIZE - 1) / TILE_SIZE, (totalHeight + TILE_SIZE - 1) / TILE_SIZE);
 
-    applyFilter<<<gridSize, blockSize>>>(d_output, d_input, width, totalHeight, startY, endY);
+    applyFilter<<<gridSize, blockSize>>>(d_output, d_input, width, totalHeight);
 
     CUDA_CHECK_RETURN(cudaDeviceSynchronize())
 
     // Copy the output back to the host for the valid output section
-    CUDA_CHECK_RETURN(cudaMemcpy(outputImage + (startY * width), d_output, (endY - startY) * width * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+    CUDA_CHECK_RETURN(cudaMemcpy(outputImage + (startY * width),
+                                 d_output + (startY - adjustedStartY) * width, (endY - startY) * width * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+    CUDA_CHECK_RETURN(cudaEventRecord(stop));
+    CUDA_CHECK_RETURN(cudaEventSynchronize(stop));
+
+    float milliseconds = 0;
+    CUDA_CHECK_RETURN(cudaEventElapsedTime(&milliseconds, start, stop));
+    std::cout << "Время обработки половины канала: " << milliseconds << " мсек" << std::endl;
     // Free device memory
     CUDA_CHECK_RETURN(cudaFree(d_input));
     CUDA_CHECK_RETURN(cudaFree(d_output));
@@ -126,7 +137,7 @@ int main()
 {
     std::cout << "Используемая память: shared memory" << std::endl;
 
-    cv::Mat img = cv::imread("Lenna.png", cv::IMREAD_COLOR);
+    cv::Mat img = cv::imread("fox.png", cv::IMREAD_COLOR);
     if (img.empty())
     {
         std::cerr << "Ошибка загрузки изображения!" << std::endl;
@@ -150,6 +161,7 @@ int main()
 #pragma omp parallel sections
     {
 #pragma omp section
+
         {
             // GPU 0
             std::cout << "Обработка верхней части изображения на GPU 0..." << std::endl;
